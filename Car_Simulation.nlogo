@@ -41,7 +41,7 @@ end
 to setup_road
   ask patches [ ifelse pycor < 10 and pycor > 7
     [ set pcolor gray - random-float 0.2 ] ; Maakt de weg grijs
-    [ set pcolor 54 - random-float 0.5 ] ] ; Maakt het gras groen
+    [ set pcolor 54 ] ] ; Maakt het gras groen
   ask patches [ if pycor = 10 or pycor = 7 [ set pcolor 4 ] ] ; Buitenlijnen van de weg
   ask patches with [ pxcor = 50 ] [ if pycor < 10 and pycor > 7 [ set pcolor red ]] ; Rode 'stopstreep'
   road_diagonal
