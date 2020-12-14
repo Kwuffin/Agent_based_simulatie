@@ -164,13 +164,11 @@ end
 to-report avr_speed
  report total_speed_all / ticks
 end
-
-;; report de gemiddelde snelheid van alle auto's op de hoofdrijbaan (aller tijde)
+;; report de gemiddelde snelheid van alle auto's op de invoegstrook en de hoofdrijbaan (aller tijde)
 to-report avr_speed_1
  report total_speed_1 / ticks
 end
 
-;; report de gemiddelde snelheid van alle auto's op de invoegstrook  (aller tijde)
 to-report avr_speed_2
  report total_speed_2 / ticks_lane_2
 end
