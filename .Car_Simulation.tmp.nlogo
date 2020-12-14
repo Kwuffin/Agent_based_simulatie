@@ -1,5 +1,4 @@
 globals [
-  cars_missing
   road_blocked
   total_speed_all
   total_speed_1
@@ -7,11 +6,13 @@ globals [
   ticks_lane_2
 ]
 
+;; Elke agent heeft een snelheid en een rijbaan
 turtles-own [
   speed
   lane
 ]
 
+;; De setup functie activeert alle andere functies om de simulatie op te starten
 to setup
   clear-all
   setup_road
@@ -19,50 +20,58 @@ to setup
   reset-ticks
 end
 
+;; De setup_cars functie spawnt alle auto's (agents) in.
 to setup_cars
   set-default-shape turtles "car"
-
   create-turtles aantal_autos [
     set lane 1
     set xcor random-xcor
     set ycor 8.5
-
-    set heading 90
+    set heading 90 ; horizontaal naar rechts
     set color one-of base-colors ; Random kleur
     set size 1
-    set speed 0.1 + random-float 0.9
-
+    set speed (0.1 + random-float 0.9) * speed_limit ; Snelheid is voor elke auto iets anders
     while [ any? other turtles-here ] [ fd 1 ] ; Zorgt ervoor dat de autos mooi verspreid komen te staan (anders staan er veel op 1 kluitje)
+  ]
 
 
+end
+
+;; De setup_road functie creeërt de omgeving (wegen & gras)
+to setup_road
+  ask patches [ ifelse pycor < 10 and pycor > 7
+    [ set pcolor gray - random-float 0.2 ] ; Maakt de weg grijs
+    [ set pcolor 54 - random-float 0.5 ] ] ; Maakt het gras groen
+  ask patches [ if pycor = 10 or pycor = 7 [ set pcolor 4 ] ] ; Buitenlijnen van de weg
+  ask patches with [ pxcor = 50 ] [ if pycor < 10 and pycor > 7 [ set pcolor red ]] ; Rode 'stopstreep'
+  road_diagonal
+
+  create-turtles 1 [ setxy -42  7 ] ; Deze onzichtbare turtle kijkt of er autos aan komen, 'de ogen' van de andere auto's
+  ask turtle 5 [ hide-turtle ] ; Dit command zorgt ervoor dat de gebruiker de turtle niet kan zien (hij heeft ook geen lane dus zal geen invloed hebben op de uitkomsten of andere agents)
+
+  ;; Deze turtles zijn bedoeld als aankleding, het zijn boompjes die op een random locatie verschijnen (niet op de weg)
+  create-turtles 10 [
+    set shape "tree"
+    set size 4
+    set color green - random-float 0.5 ; Iedereen boom net een andere kleur
+    setxy -38 -5 ; Begint linksonder
+    setxy xcor + random-float 85 ycor + random-float 9 ; Versprijd random tussen 0 & 85 patches naar rechts en 0 tot 9 naar boven
   ]
 end
 
-to setup_road
-  ask patches [ ifelse pycor < 10 and pycor > 7
-    [ set pcolor gray ]
-    [ set pcolor 64 - random-float 0.5 ] ]
-  ask patches [ if pycor = 10 or pycor = 7 [ set pcolor 4 ] ]
-  ask patches with [ pxcor = 50 ] [ if pycor < 10 and pycor > 7 [ set pcolor red ]]
-  road_diagonal
-
-  create-turtles 1 [ setxy -44  7 ] ;; Deze onzichtbare turtle kijkt of er autos aan komen, 'de ogen' van de andere auto's
-  ;ask turtle 5 [ hide-turtle ]
-
-end
-
+;; De road_diagnal functie maakt de invoegstrook
 to road_diagonal
-  create-turtles 3 [ set heading 45 ]
-  ask turtle 0 [ setxy -50 -3 ]
+  create-turtles 3 [ set heading 45 ] ; De functie maakt 3 turtles
+  ask turtle 0 [ setxy -50 -3 ] ; En zet deze turtles neer op 3 plekken
   ask turtle 1 [ setxy -50 -4 ]
   ask turtle 2 [ setxy -50 -5 ]
-  ask turtles [ set pcolor gray repeat 17 [ fd 1 set pcolor gray ] ]
-  create-turtles 2 [ set heading 45 ]
-  ask turtle 3 [ setxy -50 -2 set pcolor 4 repeat 12 [ fd 1 set pcolor 4 ] ]
+  ask turtles [ set pcolor gray repeat 17 [ fd 1 set pcolor gray - random-float 0.5 ] ] ; Deze turtles rijden met een hoek van 45 graden naar de hoofdweg toe en kleuren elke patch waar ze over rijden grijs
+  create-turtles 2 [ set heading 45 ] ; Dit zelfde gebeurt met de buitenlijnen
+  ask turtle 3 [ setxy -50 -2 set pcolor 4 repeat 12 [ fd 1 set pcolor 4 ] ] ; Deze rijden precies even lang door todat ze bij de weg zijn.
   ask turtle 4 [ setxy -50 -6 set pcolor 4 repeat 17 [ fd 1 set pcolor 4 ] ]
-  ask turtles [ die ]
+  ask turtles [ die ] ; Als ze klaar zijn gaan de turtles weg.
   ask patches with [ pycor = 7 ] [ if pxcor >= -42 and pxcor <= -38 [ set pcolor 8 ] ]
-
+  ;; Deze oplossing ziet er misschien een beetje gek uit maar word ook regelmatig gebruikt in de premade Netlogo simulaties.
 end
 
 ;; Reset de simulatie en zet de parameters naar standaardwaarde
@@ -71,33 +80,34 @@ to reset
   set speed_limit 1
   set aantal_autos 25
   set invoeg true
+  set invoeg_spawnrate 30
   setup
 end
 
-
+;; In de go functie gaan we alle auto's af, dit gebeurt per lane ( Lane1 = Rijbaan, Lane2 = Invoegstrook, Lane3 = Auto's op grijze streep bij invoegstrook (die gaan invoegen)
 to go
+  ; Auto's op rijbaan
   ask turtles with [ lane = 1 ] [
     let next-car one-of (turtles-on patch-ahead 1) with [ lane = 1 ] ; defineert next-car als de auto die (eventueel) op de voorliggende patch rijd.
     ifelse next-car = nobody ; Checkt of er wel of niet een auto op de voorliggende patch rijd
-    [ set speed speed + (0.0050 + random-float 0.0040) ] ; Versnel als er geen auto voor je zit
-    [ set speed [ speed ] of next-car - 0.050 ] ;Rem af als er een auto voor je zit
-
+    [ set speed speed + ((0.0050 + random-float 0.0040) * speed_limit ) ] ; Versnel als er geen auto voor je zit
+    [ set speed [ speed ] of next-car - (0.050 * speed_limit ) ] ;Rem af als er een auto voor je zit
     if speed < 0 [ set speed 0 ]
     if speed > speed_limit [ set speed speed_limit ]
     fd speed
     if pcolor = red [ die ] ; Auto verdwijnt als deze op het einde (rood) aankomt
   ]
 
-  check_road
+  check_road ; Checkt nadat alle auto's opde hoofdrijbaan hebben gereden of er een auto de invoegstrook blokeert.
 
-
+  ;
   ask turtles with [ lane = 2 ] [
     ;let car_ahead one-of (turtles-on patch-left-and-ahead 2 1) with [ lane = 1 ]
     ;show car_ahead
     let next-car one-of (turtles-on  patch-ahead 1.5) with [ lane = 2 or lane = 3 ]
     ifelse next-car = nobody
-    [ set speed speed + (0.0050 + random-float 0.0040) ]
-    [ set speed [ speed ] of next-car - 0.050 ]
+    [ set speed speed + ((0.0050 + random-float 0.0040) * speed_limit ) ]
+    [ set speed [ speed ] of next-car - (0.050 * speed_limit ) ]
 
     if pcolor = 8 [
       ifelse road_blocked [ set speed 0 ] [ set lane 3 ] ]
@@ -109,34 +119,38 @@ to go
 
   ask turtles with [ lane = 3 ] [
       ifelse speed = 0
-      [ set speed 0.05 + random-float 0.04 ]
-      [ set speed speed + (random-float 0.02) ]
+      [ set speed (0.7 + random-float 0.2 ) * speed_limit ]
+      [ set speed speed + (random-float 0.1) * speed_limit ]
       fd speed
       if ycor > 8.5 [ set lane 1 set ycor 8.5 set heading 90 ]
     ]
 
 
-  set cars_missing  aantal_autos - count turtles
-
   set total_speed_all total_speed_all + mean [ speed ] of turtles with [ lane = 1 or lane = 2 ]
   set total_speed_1 total_speed_1 + mean [ speed ] of turtles with [ lane = 1 ]
   if any? turtles with [ lane = 2 ] [ set total_speed_2 total_speed_2 + mean [ speed ] of turtles with [ lane = 2 ] set ticks_lane_2 ticks_lane_2 + 1]
 
+
   spawn_car
   tick
+
 end
 
 to spawn_car
   create-turtles cars_missing [
-    ifelse invoeg
-    [ifelse random 10 < 3 [ setxy -50 -4 set lane 2 set heading 45  ] [ setxy -50 8.5 set lane 1 set heading 90 ] ]
+    ifelse invoeg = true
+    [ifelse random 100 < invoeg_spawnrate [ setxy -50 -4 set lane 2 set heading 45  ] [ setxy -50 8.5 set lane 1 set heading 90 ] ]
     [ setxy -50 8.5 set lane 1 set heading 90 ]
     set speed 0.1 + random-float 0.9
   ]
 end
 
 to check_road
-  ask turtle 5 [ ifelse any? (turtles-on patches in-radius 4 ) with [ lane = 1 ] [ set road_blocked true] [ set road_blocked false ] ]
+  ask turtle 5 [ ifelse any? (turtles-on patches in-radius 5 ) with [ lane = 1 ] [ set road_blocked true] [ set road_blocked false ] ]
+end
+
+to-report cars_missing
+  report aantal_autos - count turtles with [ lane = 1 or lane = 2 or lane = 3 ]
 end
 
 to-report absolute-value [number]
@@ -162,16 +176,18 @@ end
 
 ;; report de gemiddelde snelheid van alle auto's op de invoegstrook en de hoofdrijbaan (aller tijde)
 to-report avr_speed
- report total_speed_all / ticks
-end
-;; report de gemiddelde snelheid van alle auto's op de invoegstrook en de hoofdrijbaan (aller tijde)
-to-report avr_speed_1
- report total_speed_1 / ticks
+  ifelse ticks = 0 [ report 0 ] [ report total_speed_all / ticks ]
 end
 
-to-report avr_speed_2
- report total_speed_2 / ticks_lane_2
+;; report de gemiddelde snelheid van alle auto's op de hoofdrijbaan (aller tijde)
+to-report avr_speed_1
+  ifelse ticks = 0 [ report 0 ] [ report total_speed_1 / ticks ]
 end
+
+;; report de gemiddelde snelheid van alle auto's op de invoegstrook  (aller tijde)
+to-report avr_speed_2
+  ifelse ticks_lane_2 = 0 [ report 0 ] [ report total_speed_2 / ticks_lane_2 ]
+ end
 
 
 
@@ -248,7 +264,7 @@ speed_limit
 speed_limit
 0.01
 1
-1.0
+0.93
 0.01
 1
 NIL
@@ -300,10 +316,10 @@ avr_speed
 11
 
 PLOT
-907
+729
 364
 1576
-514
+583
 Average Speed
 NIL
 Speed
@@ -312,17 +328,19 @@ Speed
 0.0
 1.0
 true
-false
+true
 "" ""
 PENS
-"default" 1.0 0 -2674135 true "" "set-plot-y-range 0 1\nplot avr_speed"
-"pen-1" 1.0 0 -7500403 true "" "plot"
+"Gemiddelde" 1.0 0 -2674135 true "" "set-plot-y-range 0 1\nplot avr_speed"
+"Huidig alle auto's" 1.0 0 -7500403 true "" "plot speed_all"
+"Huidig rijbaan" 1.0 0 -955883 true "" "plot speed_1"
+"Huidig invoeg" 1.0 0 -6459832 true "" "plot speed_2"
 
 MONITOR
-77
-210
-160
-255
+117
+637
+200
+682
 NIL
 count turtles
 17
@@ -330,10 +348,10 @@ count turtles
 11
 
 BUTTON
-82
-157
-161
-190
+29
+648
+108
+681
 Go Once
 go 
 NIL
@@ -347,10 +365,10 @@ NIL
 1
 
 SWITCH
-119
-319
-222
-352
+31
+172
+134
+205
 invoeg
 invoeg
 0
@@ -413,12 +431,38 @@ speed_2
 11
 
 MONITOR
-544
-106
-631
-151
+26
+597
+113
+642
 NIL
 road_blocked
+17
+1
+11
+
+SLIDER
+31
+208
+203
+241
+invoeg_spawnrate
+invoeg_spawnrate
+0
+100
+30.0
+1
+1
+%
+HORIZONTAL
+
+MONITOR
+121
+591
+203
+636
+NIL
+cars_missing
 17
 1
 11
@@ -769,6 +813,48 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="2000"/>
+    <metric>avr_speed</metric>
+    <metric>avr_speed_1</metric>
+    <metric>avr_speed_2</metric>
+    <enumeratedValueSet variable="speed_limit">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.15"/>
+      <value value="0.2"/>
+      <value value="0.25"/>
+      <value value="0.3"/>
+      <value value="0.35"/>
+      <value value="0.4"/>
+      <value value="0.45"/>
+      <value value="0.5"/>
+      <value value="0.55"/>
+      <value value="0.6"/>
+      <value value="0.65"/>
+      <value value="0.7"/>
+      <value value="0.75"/>
+      <value value="0.8"/>
+      <value value="0.85"/>
+      <value value="0.9"/>
+      <value value="0.95"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="aantal_autos">
+      <value value="15"/>
+      <value value="25"/>
+      <value value="35"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="invoeg">
+      <value value="true"/>
+      <value value="false"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
