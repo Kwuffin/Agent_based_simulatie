@@ -30,7 +30,7 @@ to setup_cars
     set heading 90 ; horizontaal naar rechts
     set color one-of base-colors ; Random kleur
     set size 1
-    set speed (0.1 + random-float 0.9) * speed_limit ; Snelheid is voor elke auto iets anders
+    set speed (0.1 + random-float 0.9) * speed_limit ; Snelheid is voor elke auto iets anders, * speed_limit omdat anders het optrekken onnatuurlijk gaat.
     while [ any? other turtles-here ] [ fd 1 ] ; Zorgt ervoor dat de autos mooi verspreid komen te staan (anders staan er veel op 1 kluitje)
   ]
 
@@ -50,10 +50,11 @@ to setup_road
   ask turtle 5 [ hide-turtle ] ; Dit command zorgt ervoor dat de gebruiker de turtle niet kan zien (hij heeft ook geen lane dus zal geen invloed hebben op de uitkomsten of andere agents)
 
   ;; Deze turtles zijn bedoeld als aankleding, het zijn boompjes die op een random locatie verschijnen (niet op de weg)
-  create-turtles 10 [
-    set shape "tree"
+  create-turtles 20 [
+    ifelse random 2 = 1
+    [ set shape "tree" set color green - random-float 0.5 ] ; Iedereen boom net een andere kleur
+    [ set shape "house" ]
     set size 4
-    set color green - random-float 0.5 ; Iedereen boom net een andere kleur
     setxy -38 -5 ; Begint linksonder
     setxy xcor + random-float 85 ycor + random-float 9 ; Versprijd random tussen 0 & 85 patches naar rechts en 0 tot 9 naar boven
   ]
@@ -94,7 +95,7 @@ to go
     [ set speed [ speed ] of next-car - (0.050 * speed_limit ) ] ;Rem af als er een auto voor je zit
     if speed < 0 [ set speed 0 ]
     if speed > speed_limit [ set speed speed_limit ]
-    fd speed
+    fd speed ; Rijden
     if pcolor = red [ die ] ; Auto verdwijnt als deze op het einde (rood) aankomt
   ]
 
@@ -102,59 +103,54 @@ to go
 
   ; Auto's op invoegstrook
   ask turtles with [ lane = 2 ] [
-    let next-car one-of (turtles-on  patch-ahead 1.5) with [ lane = 2 or lane = 3 ] ; Zelfde rem/rij werking als
+    let next-car one-of (turtles-on  patch-ahead 1.5) with [ lane = 2 or lane = 3 ] ; Zelfde rem/rij werking als lane1
     ifelse next-car = nobody
     [ set speed speed + ((0.0050 + random-float 0.0040) * speed_limit ) ]
     [ set speed [ speed ] of next-car - (0.050 * speed_limit ) ]
-
-    if pcolor = 8 [
-      ifelse road_blocked [ set speed 0 ] [ set lane 3 ] ]
-
+    if pcolor = 8 [  ; Wanneer de auto op de grijze streep komt
+      ifelse road_blocked [ set speed 0 ] [ set lane 3 ] ] ; stilstaan als er een auto aan komt, rijden als deze voorbij zijn.
     if speed < 0 [ set speed 0 ]
     if speed > speed_limit [ set speed speed_limit ]
     fd speed
   ]
 
+  ; Auto's die van strook wisselen (invoeg naar rijbaan)
   ask turtles with [ lane = 3 ] [
       ifelse speed = 0
       [ set speed (0.7 + random-float 0.2 ) * speed_limit ]
       [ set speed speed + (random-float 0.1) * speed_limit ]
       fd speed
-      if ycor > 8.5 [ set lane 1 set ycor 8.5 set heading 90 ]
+      if ycor > 8.5 [ set lane 1 set ycor 8.5 set heading 90 ] ; Wanneer de auto op het midden van de rijbaan komt verandert hij van lane en rijd hij mee met de andere auto's
     ]
 
-
+  ; Voor De gemiddelde snelheden slaan we de totale snelheid per tick op.
   set total_speed_all total_speed_all + mean [ speed ] of turtles with [ lane = 1 or lane = 2 ]
   set total_speed_1 total_speed_1 + mean [ speed ] of turtles with [ lane = 1 ]
-  if any? turtles with [ lane = 2 ] [ set total_speed_2 total_speed_2 + mean [ speed ] of turtles with [ lane = 2 ] set ticks_lane_2 ticks_lane_2 + 1]
-
+  if any? turtles with [ lane = 2 ] [ set total_speed_2 total_speed_2 + mean [ speed ] of turtles with [ lane = 2 ] set ticks_lane_2 ticks_lane_2 + 1] ; De checkt any? doen we omdat er niet altijd een agent op de invoegstrook rijd
 
   spawn_car
   tick
-
 end
 
+;; De functie spawn_car spawnt een aantal nieuwe auto's in (evenveel als er de huidige tick verdwenen zijn)
 to spawn_car
   create-turtles cars_missing [
     ifelse invoeg = true
-    [ifelse random 100 < invoeg_spawnrate [ setxy -50 -4 set lane 2 set heading 45  ] [ setxy -50 8.5 set lane 1 set heading 90 ] ]
+    [ifelse random 100 < invoeg_spawnrate [ setxy -50 -4 set lane 2 set heading 45  ] [ setxy -50 8.5 set lane 1 set heading 90 ] ] ; Spawnt een % op de invoegstrook
     [ setxy -50 8.5 set lane 1 set heading 90 ]
-    set speed 0.1 + random-float 0.9
+    set speed (0.1 + random-float 0.9) * speed_limit
   ]
 end
 
+;; De functie check_road kijkt vanuit turtle 5 (die eerder is geplaatst en onzichtbaar is) of er auto's aan komen rijden bij de invoegstrook, en zet road_blocked op true als deze dus niet vrij is om in te voegen.
 to check_road
   ask turtle 5 [ ifelse any? (turtles-on patches in-radius 5 ) with [ lane = 1 ] [ set road_blocked true] [ set road_blocked false ] ]
 end
 
+;; Report functies
+;; Het aantal auto's dat verdwenen (died) zijn
 to-report cars_missing
   report aantal_autos - count turtles with [ lane = 1 or lane = 2 or lane = 3 ]
-end
-
-to-report absolute-value [number]
-  ifelse number >= 0
-    [ report number ]
-    [ report (- number) ]
 end
 
 ;; report de huidige snelheid van alle auto's op de invoegstrook en de hoofdrijbaan
@@ -186,7 +182,6 @@ end
 to-report avr_speed_2
   ifelse ticks_lane_2 = 0 [ report 0 ] [ report total_speed_2 / ticks_lane_2 ]
  end
-
 
 
 ;; Bronnen:
@@ -262,7 +257,7 @@ speed_limit
 speed_limit
 0.01
 1
-0.93
+1.0
 0.01
 1
 NIL
@@ -464,6 +459,16 @@ cars_missing
 17
 1
 11
+
+TEXTBOX
+161
+335
+311
+353
+NIL
+11
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
